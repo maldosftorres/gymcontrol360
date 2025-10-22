@@ -1,0 +1,1 @@
+export { MembresiasPage } from './MembresiasPage';

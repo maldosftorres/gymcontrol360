@@ -1,0 +1,11 @@
+export { Empresa } from './empresa.entity';
+export { Sede } from './sede.entity';
+export { Usuario } from './usuario.entity';
+export { Socio } from './socio.entity';
+export { Membresia } from './membresia.entity';
+export { SocioMembresia } from './socio-membresia.entity';
+export { Pago } from './pago.entity';
+export { Caja } from './caja.entity';
+export { MovimientoCaja } from './movimiento-caja.entity';
+export { Visita } from './visita.entity';
+export { Dispositivo } from './dispositivo.entity';

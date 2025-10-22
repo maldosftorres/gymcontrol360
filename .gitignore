@@ -1,0 +1,99 @@
+# ===================================
+# GymControl 360 - Monorepo GitIgnore
+# ===================================
+
+# Dependencias de Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Archivos de compilación
+dist/
+build/
+dist-ssr/
+
+# Variables de entorno
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs/
+*.log
+
+# Cache de npm
+.npm
+.eslintcache
+
+# Coverage de tests
+coverage/
+*.nyc_output
+
+# Archivos temporales del IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS Files
+Thumbs.db
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Database
+*.db
+*.sqlite
+
+# Uploads de desarrollo
+uploads/
+
+# Archivos específicos del proyecto
+setup-local.bat
+*.docx
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory usado por herramientas como istanbul
+coverage/
+
+# Directorio de dependencias npm 
+.npm
+
+# Directorio de cache de yarn
+.yarn-integrity
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Uploads y archivos temporales
+uploads/
+temp/
+
+# Base de datos local
+*.sqlite
+*.db

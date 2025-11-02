@@ -8,6 +8,7 @@ import { Usuarios } from '../pages/Usuarios';
 import { MembresiasPage } from '../pages/Membresias/MembresiasPage';
 import { PagosPage } from '../pages/Pagos/PagosPage';
 import { CajaPage } from '../pages/Caja/CajaPage';
+import SedesPage from '../pages/SedesPage';
 import NotFound from '../pages/NotFound';
 import ProtectedRoute from './ProtectedRoute';
 
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: 'usuarios',
         element: <Usuarios />,
+      },
+      {
+        path: 'sedes',
+        element: <SedesPage />,
       },
       {
         path: 'membresias',

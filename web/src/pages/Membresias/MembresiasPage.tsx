@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { Building } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SimpleCard from '../../components/SimpleCard';
 import DataTable from '../../components/DataTable';
+import MembresiaModal from '../../components/MembresiaModal';
 import { useAuth } from '../../auth/useAuth';
 import axios from '../../lib/axios';
 import type { Membresia, CreateMembresiaDto } from '../../types';
@@ -9,11 +12,11 @@ export function MembresiasPage() {
     const { user } = useAuth();
     const [membresias, setMembresias] = useState<Membresia[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showForm, setShowForm] = useState(false);
+    const [showModal, setShowModal] = useState(false);
     const [editingMembresia, setEditingMembresia] = useState<Membresia | null>(null);
     const [formData, setFormData] = useState<CreateMembresiaDto>({
         empresaId: user?.empresaId || 0,
-        sedeId: user?.sedeId,
+        sedeId: undefined, // Inicialmente sin sede específica = todas las sedes
         nombre: '',
         descripcion: '',
         precio: 0,
@@ -45,15 +48,31 @@ export function MembresiasPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            setLoading(true);
             if (editingMembresia) {
-                await axios.put(`/membresias/${editingMembresia.id}`, formData);
+                await axios.patch(`/membresias/${editingMembresia.id}`, formData);
             } else {
                 await axios.post('/membresias', formData);
             }
-            loadMembresias();
-            resetForm();
+            await loadMembresias();
+            closeModal();
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: `Membresía ${editingMembresia ? 'actualizada' : 'creada'} correctamente`,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error('Error saving membresia:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo guardar la membresía',
+                icon: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -68,24 +87,48 @@ export function MembresiasPage() {
             duracionDias: membresia.duracionDias,
             activa: membresia.activa,
         });
-        setShowForm(true);
+        setShowModal(true);
     };
 
     const handleDelete = async (id: number) => {
-        if (confirm('¿Está seguro de eliminar esta membresía?')) {
-            try {
-                await axios.delete(`/membresias/${id}`);
-                loadMembresias();
-            } catch (error) {
-                console.error('Error deleting membresia:', error);
-            }
+        const result = await Swal.fire({
+            title: '¿Eliminar membresía?',
+            text: 'Esta acción no se puede deshacer',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await axios.delete(`/membresias/${id}`);
+            await loadMembresias();
+            
+            Swal.fire({
+                title: '¡Eliminada!',
+                text: 'Membresía eliminada correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (error) {
+            console.error('Error deleting membresia:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo eliminar la membresía',
+                icon: 'error'
+            });
         }
     };
 
     const resetForm = () => {
         setFormData({
             empresaId: user?.empresaId || 0,
-            sedeId: user?.sedeId,
+            sedeId: undefined, // Sin sede específica = todas las sedes
             nombre: '',
             descripcion: '',
             precio: 0,
@@ -93,7 +136,11 @@ export function MembresiasPage() {
             activa: true,
         });
         setEditingMembresia(null);
-        setShowForm(false);
+    };
+
+    const closeModal = () => {
+        resetForm();
+        setShowModal(false);
     };
 
     const formatCurrency = (amount: number) => {
@@ -106,6 +153,16 @@ export function MembresiasPage() {
     const columns = [
         { key: 'nombre' as keyof Membresia, header: 'Nombre' },
         { key: 'descripcion' as keyof Membresia, header: 'Descripción' },
+        { 
+            key: 'sede' as keyof Membresia, 
+            header: 'Sede',
+            render: (membresia: Membresia) => (
+                <span className="flex items-center">
+                    <Building className="w-4 h-4 mr-1 text-gray-500" />
+                    {membresia.sede ? membresia.sede.nombre : 'Todas las sedes'}
+                </span>
+            )
+        },
         { 
             key: 'precio' as keyof Membresia, 
             header: 'Precio',
@@ -146,101 +203,36 @@ export function MembresiasPage() {
                     Membresías
                 </h1>
                 <button
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => {
+                        setEditingMembresia(null);
+                        setFormData({
+                            empresaId: user?.empresaId || 0,
+                            sedeId: user?.sedeId,
+                            nombre: '',
+                            descripcion: '',
+                            precio: 0,
+                            duracionDias: 30,
+                            activa: true,
+                        });
+                        setShowModal(true);
+                    }}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Nueva Membresía
                 </button>
             </div>
 
-            {showForm && (
-                <SimpleCard className="mb-6">
-                    <h2 className="text-xl font-bold mb-4">
-                        {editingMembresia ? 'Editar Membresía' : 'Nueva Membresía'}
-                    </h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Nombre *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.nombre}
-                                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Precio *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.precio}
-                                    onChange={(e) => setFormData({ ...formData, precio: Number(e.target.value) })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                    min="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Duración (días) *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.duracionDias}
-                                    onChange={(e) => setFormData({ ...formData, duracionDias: Number(e.target.value) })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                    min="1"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Estado
-                                </label>
-                                <select
-                                    value={formData.activa ? 'true' : 'false'}
-                                    onChange={(e) => setFormData({ ...formData, activa: e.target.value === 'true' })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                >
-                                    <option value="true">Activa</option>
-                                    <option value="false">Inactiva</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Descripción
-                            </label>
-                            <textarea
-                                value={formData.descripcion}
-                                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                {editingMembresia ? 'Actualizar' : 'Crear'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={resetForm}
-                                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
-                </SimpleCard>
-            )}
+            <MembresiaModal
+                isOpen={showModal}
+                onClose={closeModal}
+                onSubmit={handleSubmit}
+                formData={formData}
+                setFormData={setFormData}
+                editingMembresia={editingMembresia}
+                loading={loading}
+                empresaId={user?.empresaId || 1}
+            />
 
             <SimpleCard>
                 <DataTable
@@ -248,6 +240,8 @@ export function MembresiasPage() {
                     columns={columns}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    loading={loading}
+                    emptyMessage="No hay membresías registradas"
                 />
             </SimpleCard>
         </div>

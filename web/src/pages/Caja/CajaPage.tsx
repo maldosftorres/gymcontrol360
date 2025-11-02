@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import SimpleCard from '../../components/SimpleCard';
 import DataTable from '../../components/DataTable';
+import AbrirCajaModal from '../../components/AbrirCajaModal';
+import CerrarCajaModal from '../../components/CerrarCajaModal';
+import MovimientoCajaModal from '../../components/MovimientoCajaModal';
 import { useAuth } from '../../auth/useAuth';
-import axios from '../../lib/axios';
+import { cajaApi } from '../../services/caja.api';
 import type { Caja, MovimientoCaja, AbrirCajaDto, CerrarCajaDto, CreateMovimientoCajaDto, MovimientoTipo } from '../../types';
 
 export function CajaPage() {
@@ -10,15 +14,15 @@ export function CajaPage() {
     const [cajaActiva, setCajaActiva] = useState<Caja | null>(null);
     const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showAbrirForm, setShowAbrirForm] = useState(false);
-    const [showCerrarForm, setShowCerrarForm] = useState(false);
-    const [showMovimientoForm, setShowMovimientoForm] = useState(false);
+    const [showAbrirModal, setShowAbrirModal] = useState(false);
+    const [showCerrarModal, setShowCerrarModal] = useState(false);
+    const [showMovimientoModal, setShowMovimientoModal] = useState(false);
     
     const [abrirData, setAbrirData] = useState<AbrirCajaDto>({
         montoInicial: 0,
-        empresaId: user?.empresaId || 0,
-        sedeId: user?.sedeId || 0,
-        usuarioId: user?.id || 0,
+        empresaId: user?.empresaId || 1,
+        sedeId: user?.sedeId || 1,
+        usuarioId: user?.id || 1,
         observaciones: '',
     });
 
@@ -49,8 +53,8 @@ export function CajaPage() {
     const loadCajaActiva = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`/caja/activa/${user?.sedeId}`);
-            setCajaActiva(response.data);
+            const caja = await cajaApi.getCajaActiva(user?.sedeId || 0);
+            setCajaActiva(caja);
         } catch (error) {
             console.error('Error loading caja activa:', error);
             setCajaActiva(null);
@@ -62,8 +66,8 @@ export function CajaPage() {
     const loadMovimientos = async () => {
         if (!cajaActiva) return;
         try {
-            const response = await axios.get(`/caja/${cajaActiva.id}/movimientos`);
-            setMovimientos(response.data);
+            const movimientos = await cajaApi.getMovimientos(cajaActiva.id);
+            setMovimientos(movimientos);
         } catch (error) {
             console.error('Error loading movimientos:', error);
         }
@@ -72,12 +76,28 @@ export function CajaPage() {
     const handleAbrirCaja = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const response = await axios.post('/caja/abrir', abrirData);
-            setCajaActiva(response.data);
-            setShowAbrirForm(false);
+            setLoading(true);
+            const caja = await cajaApi.abrir(abrirData);
+            setCajaActiva(caja);
+            setShowAbrirModal(false);
             resetAbrirForm();
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: 'Caja abierta correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error('Error abriendo caja:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo abrir la caja',
+                icon: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -85,25 +105,57 @@ export function CajaPage() {
         e.preventDefault();
         if (!cajaActiva) return;
         try {
-            await axios.patch(`/caja/${cajaActiva.id}/cerrar`, cerrarData);
+            setLoading(true);
+            await cajaApi.cerrar(cajaActiva.id, cerrarData);
             setCajaActiva(null);
             setMovimientos([]);
-            setShowCerrarForm(false);
+            setShowCerrarModal(false);
             resetCerrarForm();
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: 'Caja cerrada correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error('Error cerrando caja:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo cerrar la caja',
+                icon: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleCrearMovimiento = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/caja/movimiento', movimientoData);
-            loadMovimientos();
-            setShowMovimientoForm(false);
+            setLoading(true);
+            await cajaApi.createMovimiento(movimientoData);
+            await loadMovimientos();
+            setShowMovimientoModal(false);
             resetMovimientoForm();
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: 'Movimiento registrado correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error('Error creando movimiento:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo registrar el movimiento',
+                icon: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -185,7 +237,7 @@ export function CajaPage() {
                 </span>
             )
         },
-        { key: 'concepto' as keyof MovimientoCaja, header: 'Concepto' },
+        { key: 'descripcion' as keyof MovimientoCaja, header: 'Concepto' },
         { 
             key: 'monto' as keyof MovimientoCaja, 
             header: 'Monto',
@@ -214,22 +266,25 @@ export function CajaPage() {
                 </h1>
                 {!cajaActiva ? (
                     <button
-                        onClick={() => setShowAbrirForm(true)}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                        onClick={() => setShowAbrirModal(true)}
+                        disabled={loading}
+                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Abrir Caja
                     </button>
                 ) : (
                     <div className="flex gap-2">
                         <button
-                            onClick={() => setShowMovimientoForm(true)}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                            onClick={() => setShowMovimientoModal(true)}
+                            disabled={loading}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Nuevo Movimiento
                         </button>
                         <button
-                            onClick={() => setShowCerrarForm(true)}
-                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                            onClick={() => setShowCerrarModal(true)}
+                            disabled={loading}
+                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Cerrar Caja
                         </button>
@@ -313,195 +368,33 @@ export function CajaPage() {
                 </>
             )}
 
-            {/* Formulario Abrir Caja */}
-            {showAbrirForm && (
-                <SimpleCard className="mb-6">
-                    <h2 className="text-xl font-bold mb-4">Abrir Caja</h2>
-                    <form onSubmit={handleAbrirCaja} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Monto Inicial *
-                            </label>
-                            <input
-                                type="number"
-                                value={abrirData.montoInicial}
-                                onChange={(e) => setAbrirData({ ...abrirData, montoInicial: Number(e.target.value) })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                required
-                                min="0"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Observaciones
-                            </label>
-                            <textarea
-                                value={abrirData.observaciones}
-                                onChange={(e) => setAbrirData({ ...abrirData, observaciones: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                                Abrir Caja
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowAbrirForm(false)}
-                                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
-                </SimpleCard>
-            )}
+            <AbrirCajaModal
+                isOpen={showAbrirModal}
+                onClose={() => setShowAbrirModal(false)}
+                onSubmit={handleAbrirCaja}
+                formData={abrirData}
+                setFormData={setAbrirData}
+                loading={loading}
+            />
 
-            {/* Formulario Cerrar Caja */}
-            {showCerrarForm && cajaActiva && (
-                <SimpleCard className="mb-6">
-                    <h2 className="text-xl font-bold mb-4">Cerrar Caja</h2>
-                    <div className="bg-yellow-50 dark:bg-yellow-900 p-4 rounded-lg mb-4">
-                        <p className="text-sm">
-                            <strong>Monto calculado:</strong> {formatCurrency(calcularTotalCaja())}
-                        </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Ingrese el monto real contado en caja para calcular la diferencia.
-                        </p>
-                    </div>
-                    <form onSubmit={handleCerrarCaja} className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Monto Final Contado *
-                            </label>
-                            <input
-                                type="number"
-                                value={cerrarData.montoFinal}
-                                onChange={(e) => setCerrarData({ ...cerrarData, montoFinal: Number(e.target.value) })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                required
-                                min="0"
-                            />
-                            {cerrarData.montoFinal > 0 && (
-                                <p className="text-sm mt-1">
-                                    <strong>Diferencia:</strong> 
-                                    <span className={cerrarData.montoFinal - calcularTotalCaja() >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                        {formatCurrency(cerrarData.montoFinal - calcularTotalCaja())}
-                                    </span>
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Observaciones
-                            </label>
-                            <textarea
-                                value={cerrarData.observaciones}
-                                onChange={(e) => setCerrarData({ ...cerrarData, observaciones: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                            >
-                                Cerrar Caja
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowCerrarForm(false)}
-                                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
-                </SimpleCard>
-            )}
+            <CerrarCajaModal
+                isOpen={showCerrarModal}
+                onClose={() => setShowCerrarModal(false)}
+                onSubmit={handleCerrarCaja}
+                formData={cerrarData}
+                setFormData={setCerrarData}
+                loading={loading}
+                montoCalculado={calcularTotalCaja()}
+            />
 
-            {/* Formulario Nuevo Movimiento */}
-            {showMovimientoForm && cajaActiva && (
-                <SimpleCard className="mb-6">
-                    <h2 className="text-xl font-bold mb-4">Nuevo Movimiento</h2>
-                    <form onSubmit={handleCrearMovimiento} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Tipo *
-                                </label>
-                                <select
-                                    value={movimientoData.tipo}
-                                    onChange={(e) => setMovimientoData({ ...movimientoData, tipo: e.target.value as MovimientoTipo })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                >
-                                    <option value="INGRESO">Ingreso</option>
-                                    <option value="EGRESO">Egreso</option>
-                                    <option value="AJUSTE">Ajuste</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Monto *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={movimientoData.monto}
-                                    onChange={(e) => setMovimientoData({ ...movimientoData, monto: Number(e.target.value) })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                    min="0"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Concepto *
-                            </label>
-                            <input
-                                type="text"
-                                value={movimientoData.concepto}
-                                onChange={(e) => setMovimientoData({ ...movimientoData, concepto: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                required
-                                placeholder="Ej: Pago de servicios, Venta de producto, etc."
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Observaciones
-                            </label>
-                            <textarea
-                                value={movimientoData.observaciones}
-                                onChange={(e) => setMovimientoData({ ...movimientoData, observaciones: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                Crear Movimiento
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setShowMovimientoForm(false)}
-                                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
-                </SimpleCard>
-            )}
+            <MovimientoCajaModal
+                isOpen={showMovimientoModal}
+                onClose={() => setShowMovimientoModal(false)}
+                onSubmit={handleCrearMovimiento}
+                formData={movimientoData}
+                setFormData={setMovimientoData}
+                loading={loading}
+            />
 
             {/* Tabla de Movimientos */}
             {cajaActiva && (

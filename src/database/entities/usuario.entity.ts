@@ -26,7 +26,7 @@ export class Usuario {
   empresaId: number;
 
   @Column({ name: 'sede_id', nullable: true })
-  sedeId: number;
+  sedeId: number | null;
 
   @Column({ length: 100 })
   nombre: string;
@@ -93,6 +93,9 @@ export class Usuario {
   @Column({ name: 'fecha_baja', type: 'datetime', nullable: true })
   fechaBaja: Date;
 
+  @Column({ name: 'motivo_baja', type: 'text', nullable: true })
+  motivoBaja: string;
+
   @Column({ name: 'ultimo_acceso', type: 'datetime', nullable: true })
   ultimoAcceso: Date;
 
@@ -110,9 +113,9 @@ export class Usuario {
   @JoinColumn({ name: 'empresa_id' })
   empresa: Empresa;
 
-  @ManyToOne(() => Sede, (sede) => sede.usuarios)
+  @ManyToOne(() => Sede, (sede) => sede.usuarios, { nullable: true })
   @JoinColumn({ name: 'sede_id' })
-  sede: Sede;
+  sede: Sede | null;
 
   @OneToMany(() => Socio, (socio) => socio.usuario)
   socios: Socio[];

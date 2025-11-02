@@ -7,6 +7,7 @@ import { Socio } from '../../database/entities/socio.entity';
 import { LoginDto } from './dto/login.dto';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { ChangeStatusUsuarioDto } from './dto/change-status-usuario.dto';
 import { UsuarioRol, UsuarioEstado } from '../../common/enums/usuario.enum';
 import { SocioEstado } from '../../common/enums/socio.enum';
 
@@ -84,6 +85,12 @@ export class UsuariosService {
 
       if (existingUserByDocument) {
         throw new ConflictException('Ya existe un usuario con este número de documento');
+      }
+
+      // Validar sede según rol
+      const rol = createUsuarioDto.rol || UsuarioRol.SOCIO;
+      if (rol !== UsuarioRol.ADMINISTRADOR && !createUsuarioDto.sedeId) {
+        throw new BadRequestException('Los usuarios que no son administradores deben tener una sede asignada');
       }
 
       // Encriptar la contraseña
@@ -209,6 +216,61 @@ export class UsuariosService {
     await this.usuarioRepository.update(id, updateData);
 
     return await this.findOne(id);
+  }
+
+  async changeStatus(id: number, changeStatusDto: ChangeStatusUsuarioDto) {
+    const usuario = await this.findOne(id);
+    const { estado, motivo } = changeStatusDto;
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Actualizar el estado del usuario
+      const updateData: any = {
+        estado,
+      };
+
+      // Si se está suspendiendo o inactivando, agregar fecha de baja
+      if (estado === UsuarioEstado.INACTIVO || estado === UsuarioEstado.SUSPENDIDO) {
+        updateData.fechaBaja = new Date();
+        updateData.activo = false;
+        updateData.motivoBaja = motivo;
+      } else if (estado === UsuarioEstado.ACTIVO) {
+        // Si se está activando, limpiar fecha de baja y activar
+        updateData.fechaBaja = null;
+        updateData.activo = true;
+        updateData.motivoBaja = null;
+      }
+
+      await queryRunner.manager.update(Usuario, id, updateData);
+
+      // Si el usuario es socio, también actualizar el estado del socio
+      if (usuario.rol === UsuarioRol.SOCIO) {
+        const socioEstado = estado === UsuarioEstado.ACTIVO ? SocioEstado.ACTIVO : 
+                           estado === UsuarioEstado.SUSPENDIDO ? SocioEstado.SUSPENDIDO : 
+                           SocioEstado.INACTIVO;
+
+        await queryRunner.manager.update(Socio, 
+          { usuarioId: id }, 
+          { 
+            estado: socioEstado,
+            ...(estado !== UsuarioEstado.ACTIVO && { fechaBaja: new Date() })
+          }
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return await this.findOne(id);
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async remove(id: number) {

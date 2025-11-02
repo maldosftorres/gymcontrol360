@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import SimpleCard from '../../components/SimpleCard';
 import DataTable from '../../components/DataTable';
+import PagoModal from '../../components/PagoModal';
 import { useAuth } from '../../auth/useAuth';
+import { pagosApi } from '../../services/pagos.api';
 import axios from '../../lib/axios';
 import type { Pago, CreatePagoDto, Socio, Membresia, MetodoPago } from '../../types';
 
@@ -11,7 +14,8 @@ export function PagosPage() {
     const [socios, setSocios] = useState<Socio[]>([]);
     const [membresias, setMembresias] = useState<Membresia[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showForm, setShowForm] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [editingPago, setEditingPago] = useState<Pago | null>(null);
     const [formData, setFormData] = useState<CreatePagoDto>({
         monto: 0,
         metodoPago: 'EFECTIVO',
@@ -34,13 +38,8 @@ export function PagosPage() {
     const loadPagos = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('/pagos', {
-                params: {
-                    empresaId: user?.empresaId,
-                    sedeId: user?.sedeId,
-                }
-            });
-            setPagos(response.data);
+            const data = await pagosApi.getAll(user?.empresaId || 0, user?.sedeId);
+            setPagos(data);
         } catch (error) {
             console.error('Error loading pagos:', error);
         } finally {
@@ -79,11 +78,31 @@ export function PagosPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/pagos', formData);
-            loadPagos();
-            resetForm();
+            setLoading(true);
+            if (editingPago) {
+                await pagosApi.update(editingPago.id, formData);
+            } else {
+                await pagosApi.create(formData);
+            }
+            await loadPagos();
+            closeModal();
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: `Pago ${editingPago ? 'actualizado' : 'registrado'} correctamente`,
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error('Error saving pago:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo guardar el pago',
+                icon: 'error'
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -100,7 +119,64 @@ export function PagosPage() {
             esParcial: false,
             observaciones: '',
         });
-        setShowForm(false);
+        setEditingPago(null);
+    };
+
+    const closeModal = () => {
+        resetForm();
+        setShowModal(false);
+    };
+
+    const handleEdit = (pago: Pago) => {
+        setEditingPago(pago);
+        setFormData({
+            monto: pago.monto,
+            metodoPago: pago.metodoPago,
+            socioId: pago.socioId,
+            membresiaId: pago.membresiaId,
+            empresaId: pago.empresaId,
+            sedeId: pago.sedeId,
+            concepto: pago.concepto,
+            fechaPago: pago.fechaPago.split('T')[0], // Convertir a formato YYYY-MM-DD para input date
+            esParcial: pago.esParcial,
+            observaciones: pago.observaciones || '',
+        });
+        setShowModal(true);
+    };
+
+    const handleDelete = async (id: number) => {
+        const result = await Swal.fire({
+            title: '¿Eliminar pago?',
+            text: 'Esta acción no se puede deshacer',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await pagosApi.delete(id);
+            await loadPagos();
+            
+            Swal.fire({
+                title: '¡Eliminado!',
+                text: 'Pago eliminado correctamente',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (error) {
+            console.error('Error deleting pago:', error);
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudo eliminar el pago',
+                icon: 'error'
+            });
+        }
     };
 
     const formatCurrency = (amount: number) => {
@@ -182,156 +258,49 @@ export function PagosPage() {
                     Pagos
                 </h1>
                 <button
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => {
+                        setEditingPago(null);
+                        setFormData({
+                            monto: 0,
+                            metodoPago: 'EFECTIVO',
+                            socioId: 0,
+                            membresiaId: undefined,
+                            empresaId: user?.empresaId || 0,
+                            sedeId: user?.sedeId,
+                            concepto: '',
+                            fechaPago: new Date().toISOString().split('T')[0],
+                            esParcial: false,
+                            observaciones: '',
+                        });
+                        setShowModal(true);
+                    }}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Nuevo Pago
                 </button>
             </div>
 
-            {showForm && (
-                <SimpleCard className="mb-6">
-                    <h2 className="text-xl font-bold mb-4">Registrar Pago</h2>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Socio *
-                                </label>
-                                <select
-                                    value={formData.socioId}
-                                    onChange={(e) => setFormData({ ...formData, socioId: Number(e.target.value) })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                >
-                                    <option value={0}>Seleccionar socio</option>
-                                    {socios.map((socio) => (
-                                        <option key={socio.id} value={socio.id}>
-                                            {socio.usuario?.nombre} {socio.usuario?.apellido} - {socio.codigo}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Membresía
-                                </label>
-                                <select
-                                    value={formData.membresiaId || ''}
-                                    onChange={(e) => setFormData({ 
-                                        ...formData, 
-                                        membresiaId: e.target.value ? Number(e.target.value) : undefined 
-                                    })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                >
-                                    <option value="">Sin membresía</option>
-                                    {membresias.map((membresia) => (
-                                        <option key={membresia.id} value={membresia.id}>
-                                            {membresia.nombre} - {formatCurrency(membresia.precio)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Monto *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={formData.monto}
-                                    onChange={(e) => setFormData({ ...formData, monto: Number(e.target.value) })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                    min="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Método de Pago *
-                                </label>
-                                <select
-                                    value={formData.metodoPago}
-                                    onChange={(e) => setFormData({ ...formData, metodoPago: e.target.value as MetodoPago })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                >
-                                    <option value="EFECTIVO">Efectivo</option>
-                                    <option value="TARJETA">Tarjeta</option>
-                                    <option value="TRANSFERENCIA">Transferencia</option>
-                                    <option value="OTRO">Otro</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Fecha de Pago *
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.fechaPago}
-                                    onChange={(e) => setFormData({ ...formData, fechaPago: e.target.value })}
-                                    className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                    required
-                                />
-                            </div>
-                            <div className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    id="esParcial"
-                                    checked={formData.esParcial}
-                                    onChange={(e) => setFormData({ ...formData, esParcial: e.target.checked })}
-                                    className="mr-2"
-                                />
-                                <label htmlFor="esParcial" className="text-sm font-medium">
-                                    Es pago parcial
-                                </label>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Concepto
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.concepto}
-                                onChange={(e) => setFormData({ ...formData, concepto: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                placeholder="Ej: Pago mensualidad enero"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-2">
-                                Observaciones
-                            </label>
-                            <textarea
-                                value={formData.observaciones}
-                                onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                                className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                                rows={3}
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                type="submit"
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                Registrar Pago
-                            </button>
-                            <button
-                                type="button"
-                                onClick={resetForm}
-                                className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
-                </SimpleCard>
-            )}
+            <PagoModal
+                isOpen={showModal}
+                onClose={closeModal}
+                onSubmit={handleSubmit}
+                formData={formData}
+                setFormData={setFormData}
+                editingPago={editingPago}
+                loading={loading}
+                socios={socios}
+                membresias={membresias}
+            />
 
             <SimpleCard>
                 <DataTable
                     data={pagos}
                     columns={columns}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    loading={loading}
+                    emptyMessage="No hay pagos registrados"
                 />
             </SimpleCard>
         </div>

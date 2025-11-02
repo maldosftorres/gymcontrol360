@@ -7,11 +7,20 @@ interface Column<T> {
   render?: (item: T) => React.ReactNode;
 }
 
+interface ActionButton<T> {
+  label: string;
+  icon: React.ReactNode;
+  onClick: (item: T) => void;
+  className?: string;
+  title?: string;
+}
+
 interface DataTableProps<T> {
   data: T[];
   columns: Column<T>[];
   onEdit?: (item: T) => void;
   onDelete?: (id: number) => void;
+  additionalActions?: ActionButton<T>[];
   loading?: boolean;
   emptyMessage?: string;
   className?: string;
@@ -22,6 +31,7 @@ function DataTable<T extends { id: number }>({
   columns,
   onEdit,
   onDelete,
+  additionalActions = [],
   loading = false,
   emptyMessage = 'No hay datos para mostrar',
   className = ''
@@ -61,7 +71,7 @@ function DataTable<T extends { id: number }>({
                   {column.header}
                 </th>
               ))}
-              {(onEdit || onDelete) && (
+              {(onEdit || onDelete || additionalActions.length > 0) && (
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Acciones
                 </th>
@@ -76,9 +86,19 @@ function DataTable<T extends { id: number }>({
                     {column.render ? column.render(item) : String(item[column.key] ?? '')}
                   </td>
                 ))}
-                {(onEdit || onDelete) && (
+                {(onEdit || onDelete || additionalActions.length > 0) && (
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">
+                      {additionalActions.map((action, index) => (
+                        <button
+                          key={index}
+                          onClick={() => action.onClick(item)}
+                          className={action.className || 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}
+                          title={action.title || action.label}
+                        >
+                          {action.icon}
+                        </button>
+                      ))}
                       {onEdit && (
                         <button
                           onClick={() => onEdit(item)}

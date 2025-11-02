@@ -1,5 +1,5 @@
 import api from '../lib/axios';
-import type { Usuario, CreateUsuarioDto } from '../types';
+import type { Usuario, CreateUsuarioDto, ChangeStatusUsuarioDto } from '../types';
 
 export const usuariosApi = {
   // Obtener todos los usuarios
@@ -17,6 +17,10 @@ export const usuariosApi = {
   // Actualizar un usuario
   update: (id: number, data: Partial<CreateUsuarioDto>) => 
     api.patch<Usuario>(`/usuarios/${id}`, data),
+
+  // Cambiar estado de un usuario
+  changeStatus: (id: number, data: ChangeStatusUsuarioDto) => 
+    api.patch<Usuario>(`/usuarios/${id}/status`, data),
 
   // Eliminar un usuario (soft delete)
   delete: (id: number) => 

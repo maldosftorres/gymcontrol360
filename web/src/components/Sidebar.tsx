@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BarChart3, Settings, Users, ChevronRight, ChevronLeft, Zap, CreditCard, DollarSign, Vault } from 'lucide-react';
+import { Home, BarChart3, Settings, Users, ChevronRight, ChevronLeft, Zap, CreditCard, DollarSign, Vault, Building2 } from 'lucide-react';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -19,6 +19,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       path: '/usuarios',
       icon: Users,
       label: 'Usuarios',
+      exact: false,
+    },
+    {
+      path: '/sedes',
+      icon: Building2,
+      label: 'Sedes',
       exact: false,
     },
     {

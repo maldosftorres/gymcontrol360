@@ -96,6 +96,11 @@ export interface CreateUsuarioDto {
     notas?: string;
 }
 
+export interface ChangeStatusUsuarioDto {
+    estado: 'ACTIVO' | 'INACTIVO' | 'SUSPENDIDO';
+    motivo?: string;
+}
+
 // Tipos literales
 export type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'OTRO';
 export type CajaEstado = 'ABIERTA' | 'CERRADA';
@@ -179,7 +184,7 @@ export interface MovimientoCaja {
     pagoId?: number;
     tipo: MovimientoTipo;
     monto: number;
-    concepto: string;
+    descripcion: string;
     fecha: string;
     observaciones?: string;
     creadoEn: string;

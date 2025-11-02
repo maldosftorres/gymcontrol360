@@ -50,7 +50,11 @@ export class CajaService {
       observaciones: 'Monto inicial de apertura',
     });
 
-    return cajaNueva;
+    // Cargar la caja con sus relaciones para retornarla
+    return await this.cajaRepository.findOne({
+      where: { id: cajaNueva.id },
+      relations: ['usuarioAbierto'],
+    });
   }
 
   async cerrarCaja(cajaId: number, cerrarCajaDto: CerrarCajaDto): Promise<Caja> {
@@ -78,7 +82,7 @@ export class CajaService {
   async getCajaActiva(sedeId: number): Promise<Caja | null> {
     return await this.cajaRepository.findOne({
       where: { sedeId, estado: CajaEstado.ABIERTA },
-      relations: ['movimientos'],
+      relations: ['usuarioAbierto', 'usuarioCerrado'],
     });
   }
 
@@ -132,7 +136,12 @@ export class CajaService {
     }
 
     const movimiento = this.movimientoCajaRepository.create({
-      ...createMovimientoDto,
+      empresaId: caja.empresaId,
+      sedeId: caja.sedeId,
+      cajaId: createMovimientoDto.cajaId,
+      tipo: createMovimientoDto.tipo,
+      monto: createMovimientoDto.monto,
+      descripcion: createMovimientoDto.concepto,
       fecha: new Date(),
     });
 
@@ -142,7 +151,6 @@ export class CajaService {
   async getMovimientosCaja(cajaId: number): Promise<MovimientoCaja[]> {
     return await this.movimientoCajaRepository.find({
       where: { cajaId },
-      relations: ['pago', 'pago.socio', 'pago.socio.usuario'],
       order: { fecha: 'ASC' },
     });
   }
